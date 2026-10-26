@@ -53,3 +53,10 @@ Cache every file under `broll/<topic>/` in the video folder, with a `sources.md`
   - there are no stray noises at cuts.
 - A contact sheet of every graphic is reviewed by eye.
 - Pages are checked for bot or verification screens. A "verify you are human" page is not b-roll; use a logo card instead.
+
+## 8. Check the picks against the script
+
+Before b-roll goes into a Short: `studio broll-sheet broll/clips.json script.md` renders the start, middle and end
+frame of every clip, labelled with its line, and flags on-screen years that contradict the line. Read the sheet too:
+a clip can start on the wrong shot, and another creator's collage can carry a date that isn't yours. Prefer clean
+frames; if only a collage exists, say so in sources.md.

@@ -44,6 +44,7 @@ check() {
   [ -x "$VENV/bin/python" ] && "$VENV/bin/python" -c "import torch, torchaudio, numpy, scipy, PIL, websocket, fontTools" 2>/dev/null \
     && st venv ok "$VENV" || st venv MISSING "Python packages: torch, torchaudio, numpy, scipy, pillow, websocket-client, fonttools"
   [ -s "$WHISPER_MODEL" ] && st models ok "$MODELS" || st models MISSING "speech models, about 2.7 GB download (once)"
+  have tesseract && st ocr ok "$(command -v tesseract)" || st ocr optional "tesseract reads on-screen text in b-roll to catch wrong dates"
   chrome_path >/dev/null && st chrome ok "$(chrome_path)" || st chrome MISSING "Google Chrome renders the motion graphics"
   [ -x "$HOME_DIR/bin/studio" ] && st command ok "$HOME_DIR/bin/studio" || st command MISSING "the studio command"
 }
@@ -79,6 +80,8 @@ install_one() {
       fi
       # the word-timing model (wav2vec2, about 1.2 GB) downloads into torch's cache on first load
       "$VENV/bin/python" -c "import torchaudio; torchaudio.pipelines.WAV2VEC2_ASR_LARGE_LV60K_960H.get_model(); print('word-timing model ready')" ;;
+    ocr)
+      if [ "$OS" = "Darwin" ]; then brew install tesseract; else sudo apt-get install -y tesseract-ocr; fi ;;
     chrome)
       if [ "$OS" = "Darwin" ]; then brew install --cask google-chrome; else echo "Install Google Chrome or Chromium with your package manager, then run check again."; fi ;;
     command)
@@ -97,6 +100,7 @@ case "\$cmd" in
   render)     exec "$VENV/bin/python" "\$@" ;;
   kit)        exec "$VENV/bin/python" -m studio.kitcli "\$@" ;;
   webshot)    exec "$VENV/bin/python" -m studio.webshot "\$@" ;;
+  broll-sheet) exec "$VENV/bin/python" -m studio.brollsheet "\$@" ;;
   python)     exec "$VENV/bin/python" "\$@" ;;
   *) echo "studio: transcribe <video> | render <spec.py> | qa <spec.py> <out.mp4> | brand ... | kit ... | webshot <url> <out.png>"; exit 2 ;;
 esac

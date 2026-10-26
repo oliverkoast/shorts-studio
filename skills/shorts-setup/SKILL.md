@@ -14,6 +14,7 @@ The setup script is `scripts/setup.sh` in this plugin (two folders up from this 
    - python, venv: Python 3.10+ and a private environment in ~/.shorts-studio/venv (about 0.9 GB, mostly PyTorch).
    - models: the speech models, about 2.7 GB, downloaded once into ~/.shorts-studio/models and torch's cache.
    - chrome: Google Chrome, used headless to render the graphics.
+   - ocr (optional): tesseract, which reads on-screen text in b-roll so wrong dates get flagged.
    - command: the `studio` command in ~/.shorts-studio/bin.
 3. Run `bash <plugin>/scripts/setup.sh install <items...>` for the ones they approve. Use a long timeout (models take
    several minutes) and run it in the background if your tools allow, reporting when it finishes.
