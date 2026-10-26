@@ -1,0 +1,13 @@
+{
+  "name": "shorts-studio",
+  "owner": { "name": "Oliver Korzen", "url": "https://github.com/oliverkoast" },
+  "description": "Shorts Studio: long videos in, finished Shorts out, inside Claude Code.",
+  "plugins": [
+    {
+      "name": "shorts-studio",
+      "source": "./",
+      "description": "Turn long videos into finished Shorts: four Short types, real b-roll, motion graphics in your brand, and a 13-check QA gate.",
+      "category": "media"
+    }
+  ]
+}

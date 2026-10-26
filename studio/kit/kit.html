@@ -1,0 +1,418 @@
+<!doctype html>
+<!--
+  SCENE KIT: vertical (1080x1920) motion graphics for Shorts, styled by a brand (theme.json). One page, ten scenes,
+  every frame a pure function of t (the STUDIO driver in motion.js), so the exporter walks t at 30 fps.
+  Every scene has a HUD frame (corner brackets, micro labels, running timecode, progress hairline), a drifting dot
+  grid, the brand texture as metal when the brand has one, eased moves only, a slow camera push, and motion blur.
+
+  Usage: kit.html?spec=<file:///.../clip.js>&t=<s>       spec: KIT = { dur, scene, ground, hud, brand, ...scene params }
+  Grounds: ink (dark), marine (deep colour), bronze (texture or second accent), bone (light).
+
+    counter    { value, decimals, prefix, suffix, label, t0, t1, sub2, compare }    the number runs up, a meter fills
+    keyword    { lines: [[text, t]], sub }                                            lines land, the last in the accent
+    versus     { title, a: {value, label, t, w}, b: {...} }                           two cards in sequence
+    timeline   { title, items: [{ t, date, text }] }                                  a rail draws, dots land
+    quote      { text, size, name, role, avatar, logo, t0 }                           words reveal one by one
+    logo       { logo, title, sub, t0, metal }                                        a real logo through an aperture
+    diagram    { title, nodes: [{ id, label, x, y, t, accent }], edges: [{ from, to, t }] }   pulses travel the edges
+    height     { items: [{ label, h, w, t, kind, accent }], counter, source }         to scale on one ground line
+    moneyflow  { logo, title, left, right, lockLabel, t0, tLink, tLock, tFlow, risk, tRisk }   a link, a lock, coins
+    ui         { img, keys: [{ t, x, y, w, ease }], calls: [{ k, x, y, w, h, t0, t1, ang }], label, labelT }
+  Logos and avatars are always real files passed in; nothing is redrawn.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Shorts Studio kit</title>
+
+<style>html, body { margin: 0; background: #000; } canvas { display: block; width: 1080px; height: 1920px; }</style>
+<script>document.write('<script src="' + new URLSearchParams(location.search).get('spec') + '"><\/script>');</script>
+</head>
+<body>
+<script>(function(){const B=(window.KIT||{}).brand||{},f=B.fonts||{},css=[];if(f.display)css.push(`@font-face{font-family:"Display";src:url("${f.display.file}");font-weight:100 900}`);if(f.text)css.push(`@font-face{font-family:"Text";src:url("${f.text.file}");font-weight:100 900}`);const st=document.createElement('style');st.textContent=css.join('');document.head.appendChild(st);})();</script>
+<canvas id="stage" width="1080" height="1920"></canvas>
+<script src="./motion.js"></script>
+<script>
+const K = window.KIT;
+// brand: semantic colours (light, dark, accent, accent2, deep), font files, optional texture, logo
+const BR = K.brand || {};
+const BC = BR.colors || {};
+const C = { bone: BC.light || '#F7F7F5', ink: BC.dark || '#16181D', sand: BC.accent || '#F2C14E', slate: BC.accent2 || '#5B6B7F',
+            marine: BC.deep || '#24324A', blush: BC.light || '#F7F7F5' };
+const rgba = (hex, a) => { const h = hex.replace('#', ''); return `rgba(${parseInt(h.slice(0, 2), 16)},${parseInt(h.slice(2, 4), 16)},${parseInt(h.slice(4, 6), 16)},${a})`; };
+const assets = {};
+if (BR.texture) assets.bronze = BR.texture;
+if (BR.texture2 || BR.texture) assets.marineTex = BR.texture2 || BR.texture;
+if (BR.logo) assets.mark = BR.logo;
+['img', 'avatar', 'logo'].forEach(k => { if (K[k]) assets[k] = K[k]; });
+if (!assets.logo && BR.logo && K.scene === 'logo') assets.logo = BR.logo;
+const W = 1080, H = 1920;
+const off = document.createElement('canvas'); off.width = W; off.height = H;
+const og = off.getContext('2d');
+
+STUDIO.run({
+  canvas: document.getElementById('stage'), duration: K.dur, poster: Math.min(K.dur * 0.7, 2.2), assets,
+  render(t, a) {
+    // motion blur: average sub-frames across a 180 degree shutter at 30 fps
+    const N = 3, SH = 0.5 / 30, ctx = a.ctx;
+    for (let k = 0; k < N; k++) {
+      og.setTransform(1, 0, 0, 1, 0, 0); og.clearRect(0, 0, W, H);
+      draw(og, Math.max(0, t - SH * (k / (N - 1))), a);
+      ctx.globalAlpha = 1 / (k + 1); ctx.drawImage(off, 0, 0);
+    }
+    ctx.globalAlpha = 1;
+  },
+});
+
+function draw(g, t, a) {
+  window.__boxes = [];
+  const rec = (kind, x, y, w, h, extra) => { const m = g.getTransform(); const sx = Math.hypot(m.a, m.b), sy = Math.hypot(m.c, m.d);
+    window.__boxes.push(Object.assign({ kind, x: m.e + x * sx, y: m.f + y * sy, w: w * sx, h: h * sy, alpha: g.globalAlpha }, extra || {})); };
+  const { img, ease: E, clamp, lerp, setFont, seg } = a;
+  const inn = (t0, d = 0.4) => E.outExpo(seg(t, t0, t0 + d));
+  const back = (t0, d = 0.5) => E.outBack(seg(t, t0, t0 + d));
+  const io = (t0, t1) => E.inOutCubic(seg(t, t0, t1));
+  const rr = (x, y, w, h, r) => { g.beginPath(); g.roundRect(x, y, w, h, r); rec('card', x, y, w, h); };
+  const dark = K.ground !== 'bone';
+  const fg = dark ? C.bone : C.ink, fgA = al => dark ? rgba(C.bone, al) : rgba(C.ink, al);
+  const tex = img.bronze || null, tw = tex ? tex.naturalWidth : 1, th = tex ? tex.naturalHeight : 1;
+  // with a texture: the texture as metal; without one: the brand accent, flat
+  const metalFill = (sx = 1.4, ox = 0, oy = 0) => { if (!tex) return C.sand; const p = g.createPattern(tex, 'no-repeat'); const s = Math.max(W / tw, H / th) * sx;
+    p.setTransform(new DOMMatrix().translate(ox + (W - tw * s) / 2, oy + (H - th * s) / 2).scale(s)); return p; };
+  const font = (fam, size, weight) => setFont(g, { family: fam, size, weight: weight || (fam === 'display' ? 700 : 400) });
+  const text = (s, x, y, { size = 90, fam = 'display', color = fg, align = 'center', alpha = 1, weight, track } = {}) => {
+    setFont(g, { family: fam, size, weight: weight || (fam === 'display' ? 700 : 400), tracking: track });
+    g.textAlign = align; g.textBaseline = 'middle'; g.globalAlpha = alpha; g.fillStyle = color; g.fillText(s, x, y);
+    const w = g.measureText(s).width, x0 = align === 'center' ? x - w / 2 : align === 'right' ? x - w : x;
+    if (alpha > 0.05 && s.trim()) rec('text', x0, y - size * 0.45, w, size * 0.9, { s });
+    g.globalAlpha = 1;
+  };
+  const fit = (s, maxw, size, fam = 'display') => { font(fam, size); const w = g.measureText(s).width; return w > maxw ? size * maxw / w : size; };
+  const D = K.dur;
+
+  // ---- ground: colour, the bronze light band, a drifting dot grid -------------------------
+  if (K.ground === 'marine' || K.ground === 'bronze') {
+    const T2 = K.ground === 'marine' ? img.marineTex : tex;
+    if (T2) {
+      const s = Math.max(W / T2.naturalWidth, H / T2.naturalHeight) * 1.25;
+      g.drawImage(T2, -40 - (t / D) * 120, -60, T2.naturalWidth * s, T2.naturalHeight * s);
+      g.fillStyle = 'rgba(0,0,0,0.5)'; g.fillRect(0, 0, W, H);
+    } else {                                    // no texture: the deep brand colour with a slow light sweep
+      g.fillStyle = K.ground === 'marine' ? C.marine : C.slate; g.fillRect(0, 0, W, H);
+      const gx = lerp(-400, 1400, (t / Math.max(D, 2.5)) * 0.5 + 0.1), gr = g.createRadialGradient(gx, 500, 50, gx, 500, 1100);
+      gr.addColorStop(0, 'rgba(255,255,255,0.10)'); gr.addColorStop(1, 'rgba(255,255,255,0)'); g.fillStyle = gr; g.fillRect(0, 0, W, H);
+    }
+  } else { g.fillStyle = dark ? C.ink : C.bone; g.fillRect(0, 0, W, H); }
+  if (dark && tex) {                            // a soft band of the brand texture crossing on a diagonal
+    g.save(); g.globalAlpha = 0.16; g.translate(W / 2, H / 2); g.rotate(-0.42);
+    const bx = lerp(-1300, 1300, (t / Math.max(D, 2.5)) * 0.6 + 0.2);
+    g.fillStyle = metalFill(1.6, bx * 0.3, 0); g.fillRect(bx - 260, -1600, 520, 3200);
+    g.restore();
+  }
+  g.fillStyle = fgA(dark ? 0.07 : 0.09);
+  for (let yy = 70; yy < H; yy += 54) for (let xx = 30 + (t * 9) % 54; xx < W; xx += 54) { g.beginPath(); g.arc(xx, yy, 1.7, 0, 7); g.fill(); }
+
+  // ---- the slow camera push under the scene ----------------------------------------------
+  const push = lerp(1.0, 1.045, E.inOutCubic(clamp(t / Math.max(D, 0.1))));
+  g.save(); g.translate(W / 2, 900); g.scale(push, push); g.translate(-W / 2, -900);
+
+  const S = K.scene;
+  if (S === 'counter') {
+    const t0 = K.t0 || 0, t1 = K.t1 || t0 + 1.2;
+    const p = E.outQuint(seg(t, t0, t1));
+    const fmt = v => (K.prefix || '') + v.toLocaleString('en-US', { minimumFractionDigits: K.decimals || 0, maximumFractionDigits: K.decimals || 0 }) + (K.suffix || '');
+    const fin = fmt(K.value), s = fmt(lerp(K.from || 0, K.value, p));
+    const size = fit(fin, 780, 190); font('display', size); const bw = g.measureText(fin).width + 120, bh = size * 1.35;
+    const sc = back(t0 - 0.15, 0.55);
+    g.save(); g.translate(W / 2, K.cy || 820); g.scale(sc, sc);
+    g.shadowColor = 'rgba(0,0,0,0.35)'; g.shadowBlur = 40; g.shadowOffsetY = 18;
+    g.fillStyle = C.sand; rr(-bw / 2, -bh / 2, bw, bh, 20); g.fill(); g.shadowColor = 'transparent';
+    g.strokeStyle = metalFill(1.2, t * 40); g.lineWidth = 6; rr(-bw / 2, -bh / 2, bw, bh, 20); g.stroke();
+    text(s, 0, 8, { size, color: C.ink });
+    g.restore();
+    // meter: 40 ticks fill with the count
+    const n = 40, x0 = 140, x1 = 940, ym = (K.cy || 820) + bh / 2 + 90;
+    for (let i = 0; i < n; i++) { const on = i / n < p; g.fillStyle = on ? C.sand : fgA(0.18);
+      g.fillRect(x0 + (x1 - x0) * i / n, ym - (on ? 22 : 12) * inn(t0), 10, (on ? 44 : 24) * inn(t0)); }
+    if (K.label) text(K.label, W / 2, ym + 100, { size: fit(K.label, 900, 50, 'text'), fam: 'text', alpha: inn(t0 + 0.3), color: dark ? C.sand : C.slate });
+    if (K.sub2) text(K.sub2, W / 2, ym + 170, { size: fit(K.sub2, 900, 44), alpha: inn(K.tSub2 || t0 + 0.5) });
+    if (K.compare) {
+      const mx = Math.max(K.compare.a.v, K.compare.b.v), yb = ym + (K.sub2 ? 250 : 180);
+      [K.compare.a, K.compare.b].forEach((c, i) => {
+        const pc = E.outQuint(seg(t, c.t, c.t + 0.9)); if (pc <= 0) return;
+        const bw = 760 * c.v / mx * pc, yy = yb + i * 70;
+        g.fillStyle = i === 0 ? C.sand : C.slate; rr(160, yy, Math.max(bw, 2), 30, 8); g.fill();
+        text(c.label, 160, yy - 18, { size: 26, fam: 'text', align: 'left', alpha: inn(c.t), color: fgA(0.85) });
+      });
+    }
+  }
+  if (S === 'keyword') {
+    const n = K.lines.length, gap = 200, y0 = 860 - (n - 1) * gap / 2;
+    K.lines.forEach(([s, t0], i) => {
+      const p = inn(t0, 0.45); if (p <= 0) return;
+      const size = fit(s, 900, 160), y = y0 + i * gap, last = i === n - 1;
+      g.save(); g.translate(W / 2 + (1 - p) * (i % 2 ? 60 : -60), y); g.scale(lerp(1.18, 1, p), lerp(1.18, 1, p));
+      text(s, 0, 0, { size, alpha: p, color: last && dark ? C.sand : fg });
+      if (last && dark) text(s, 0, 0, { size, alpha: p * 0.55, color: metalFill(1.1, -t * 90, 0) });
+      g.restore();
+      if (last) { const u = E.outExpo(seg(t, t0 + 0.25, t0 + 0.85)); font('display', size); const w = g.measureText(s).width;
+        g.fillStyle = C.sand; g.fillRect(W / 2 - w / 2, y + size * 0.64, w * u, 12);
+        g.fillStyle = fgA(0.35); g.fillRect(W / 2 - w / 2 + w * u, y + size * 0.64 + 4, (1 - u) * w * 0.3, 4); }
+    });
+    if (K.sub) text(K.sub, W / 2, y0 + (n - 1) * gap + 170, { size: fit(K.sub, 880, 46, 'text'), fam: 'text', alpha: inn(K.lines[n - 1][1] + 0.45), color: dark ? C.sand : C.slate, track: '0.06em' });
+  }
+  if (S === 'versus') {
+    if (K.title) text(K.title, W / 2, 360, { size: fit(K.title, 900, 64), alpha: inn(0), track: '0.02em' });
+    [[K.a, 590], [K.b, 1110]].forEach(([s, y], i) => {
+      const p = back(s.t, 0.55); if (p <= 0) return;
+      g.save(); g.translate(W / 2 + (1 - E.outExpo(seg(t, s.t, s.t + 0.5))) * (i ? 90 : -90), y);
+      const size = fit(s.value, 760, 140);
+      g.shadowColor = 'rgba(0,0,0,0.35)'; g.shadowBlur = 40; g.shadowOffsetY = 16;
+      g.globalAlpha = E.outExpo(seg(t, s.t, s.t + 0.35));
+      g.fillStyle = i === 0 ? C.sand : C.slate; rr(-420, -150, 840, 300, 24); g.fill(); g.shadowColor = 'transparent';
+      text(s.value, 0, -40, { size, color: i === 0 ? C.ink : C.bone });
+      text(s.label, 0, 62, { size: fit(s.label, 740, 42, 'text'), fam: 'text', color: i === 0 ? C.ink : C.bone, alpha: inn(s.t + 0.2) });
+      const bw = 700 * (s.w == null ? 1 : s.w) * E.outQuint(seg(t, s.t + 0.25, s.t + 1.4));
+      if ((s.w == null ? 1 : s.w) >= 0.1 && bw > 4) { g.fillStyle = i === 0 ? C.ink : C.sand; g.globalAlpha = 0.85; rr(-350, 108, bw, 14, 7); g.fill(); }
+      g.globalAlpha = 1;
+      g.restore();
+    });
+    const pv = back(K.b.t - 0.2, 0.4);
+    if (pv > 0) { g.save(); g.translate(W / 2, 840); g.rotate((1 - pv) * -0.6); g.scale(pv, pv);
+      g.fillStyle = C.ink; g.beginPath(); g.arc(0, 0, 70, 0, 7); g.fill(); g.strokeStyle = metalFill(1, t * 50); g.lineWidth = 5; g.stroke();
+      text('VS', 0, 4, { size: 58, color: C.sand }); g.restore(); }
+  }
+  if (S === 'timeline') {
+    if (K.title) text(K.title, W / 2, 360, { size: fit(K.title, 900, 66), alpha: inn(0) });
+    const x = 190, y0 = 560, step = Math.min(320, 760 / Math.max(1, K.items.length - 1)), yEnd = y0 + step * (K.items.length - 1);
+    const last = K.items.reduce((m, it, i) => (t >= it.t ? i : m), 0);
+    const ry = lerp(y0, yEnd, E.inOutCubic(seg(t, 0, K.items[K.items.length - 1].t + 0.3)));
+    g.strokeStyle = fgA(0.25); g.lineWidth = 6; g.beginPath(); g.moveTo(x, y0); g.lineTo(x, yEnd); g.stroke();
+    g.strokeStyle = C.sand; g.beginPath(); g.moveTo(x, y0); g.lineTo(x, ry); g.stroke();
+    K.items.forEach((it, i) => {
+      const p = back(it.t, 0.5); if (p <= 0) return; const y = y0 + step * i;
+      g.fillStyle = C.sand; g.beginPath(); g.arc(x, y, 24 * p, 0, 7); g.fill();
+      if (i === last) { g.strokeStyle = rgba(C.sand, 0.5); g.lineWidth = 3; g.beginPath(); g.arc(x, y, 24 + 26 * ((t * 1.2) % 1), 0, 7); g.stroke(); }
+      const q = inn(it.t + 0.08, 0.5);
+      text(it.date, x + 70 + (1 - q) * 60, y - 34, { size: 54, align: 'left', color: dark ? C.sand : C.slate, alpha: q });
+      text(it.text, x + 70 + (1 - q) * 90, y + 32, { size: fit(it.text, 760, 42, 'text'), fam: 'text', align: 'left', alpha: q });
+    });
+  }
+  if (S === 'quote') {
+    const t0 = K.t0 || 0, p = inn(t0, 0.6), qs = K.size || 72, lh = qs * 1.22;
+    g.save(); g.translate(0, (1 - p) * 60); g.globalAlpha = p;
+    font('display', qs); const nl = Math.max(1, Math.ceil(g.measureText(K.text).width / 800));
+    const ch = 260 + nl * lh + 220;
+    g.fillStyle = dark ? 'rgba(247,247,245,0.07)' : 'rgba(34,31,30,0.06)'; rr(70, 470, 940, ch, 30); g.fill();
+    g.strokeStyle = fgA(0.18); g.lineWidth = 2; rr(70, 470, 940, ch, 30); g.stroke();
+    g.globalAlpha = 1;
+    text('“', 150 + Math.sin(t * 1.4) * 6, 600, { size: 260, align: 'left', color: dark ? metalFill(1.1, t * 70) : C.slate, alpha: p });
+    font('display', qs); const words = K.text.split(' '); const lines = []; let cur = '';
+    words.forEach(w => { const tt = cur ? cur + ' ' + w : w; if (g.measureText(tt).width > 780 && cur) { lines.push(cur); cur = w; } else cur = tt; });
+    lines.push(cur);
+    let wi = 0; const ytop = 720 + qs * 0.5;
+    lines.forEach((l, i) => { let x = 130; l.split(' ').forEach(w => { const q = inn(t0 + 0.2 + wi * 0.09, 0.4); wi++;
+      font('display', qs); const ww = g.measureText(w + ' ').width;
+      text(w, x, ytop + i * lh + (1 - q) * 30, { size: qs, align: 'left', alpha: q }); x += ww; }); });
+    const yb = ytop + (lines.length - 1) * lh + qs * 0.5 + 90, q2 = inn(t0 + 0.5, 0.5);
+    g.fillStyle = C.sand; g.fillRect(130, yb - 30, 120 * q2, 6);
+    let nx = 130;
+    if (img.avatar) { g.save(); g.beginPath(); g.arc(190, yb + 70, 60, 0, 7); g.clip(); g.drawImage(img.avatar, 130, yb + 10, 120, 120); g.restore(); nx = 280; }
+    text(K.name || '', nx, yb + 40, { size: 48, align: 'left', alpha: q2 });
+    text(K.role || '', nx, yb + 100, { size: fit(K.role || '', 720, 34, 'text'), fam: 'text', align: 'left', color: dark ? C.sand : C.slate, alpha: q2 });
+    if (img.logo) { const lh2 = 64, lw = Math.min(260, lh2 * img.logo.naturalWidth / img.logo.naturalHeight); g.globalAlpha = q2;
+      g.drawImage(img.logo, 960 - lw, yb + 10, lw, lw * img.logo.naturalHeight / img.logo.naturalWidth); g.globalAlpha = 1; }
+    g.restore();
+  }
+  if (S === 'logo') {
+    const t0 = K.t0 || 0, L = img.logo || img.mark;
+    if (!L) { text(K.title || '', W / 2, 820, { size: fit(K.title || '', 920, 110), alpha: inn(t0 + 0.2) }); }
+    else {
+    const s = Math.min(720 / L.naturalWidth, 420 / L.naturalHeight), w = L.naturalWidth * s, h = L.naturalHeight * s;
+    const r = E.outExpo(seg(t, t0, t0 + 0.8));
+    // rings expanding behind
+    for (let k = 0; k < 3; k++) { const u = ((t - t0) * 0.5 + k / 3) % 1; if (t < t0) break;
+      g.strokeStyle = dark ? rgba(C.sand, 0.35 * (1 - u)) : rgba(C.slate, 0.3 * (1 - u)); g.lineWidth = 3; g.beginPath(); g.arc(W / 2, 800, 260 + u * 420, 0, 7); g.stroke(); }
+    g.save(); g.beginPath(); g.arc(W / 2, 800, Math.max(1, r * 720), 0, 7); g.clip();
+    const sc = lerp(0.8, 1, r); g.translate(W / 2, 800); g.scale(sc, sc);
+    if (K.metal && tex) g.drawImage(a.metal(L, tex, Math.round(w), Math.round(h), 0.15 + 0.7 * seg(t, t0, t0 + D)), -w / 2, -h / 2, w, h);
+    else g.drawImage(L, -w / 2, -h / 2, w, h);
+    g.restore();
+    if (K.title) text(K.title, W / 2, 800 + h / 2 + 140, { size: fit(K.title, 920, 84), alpha: inn(t0 + 0.45) });
+    if (K.sub) text(K.sub, W / 2, 800 + h / 2 + 240, { size: fit(K.sub, 880, 44, 'text'), fam: 'text', color: dark ? C.sand : C.slate, alpha: inn(t0 + 0.65), track: '0.06em' });
+    }
+  }
+  if (S === 'diagram') {
+    if (K.title) text(K.title, W / 2, 360, { size: fit(K.title, 900, 66), alpha: inn(0) });
+    const N = {}; K.nodes.forEach(n => N[n.id] = n);
+    const lineC = dark ? C.sand : C.slate;
+    K.edges.forEach((e, ei) => {
+      const p = E.outExpo(seg(t, e.t, e.t + 0.5)); if (p <= 0) return;
+      const A = N[e.from], B = N[e.to]; const dx = B.x - A.x, dy = B.y - A.y, L = Math.hypot(dx, dy), ux = dx / L, uy = dy / L;
+      const sx = A.x + ux * 92, sy = A.y + uy * 92, ex = B.x - ux * 104, ey = B.y - uy * 104;
+      g.strokeStyle = lineC; g.lineWidth = 8; g.lineCap = 'round'; g.setLineDash([2, 18]); g.lineDashOffset = -t * 60;
+      g.beginPath(); g.moveTo(sx, sy); g.lineTo(lerp(sx, ex, p), lerp(sy, ey, p)); g.stroke(); g.setLineDash([]);
+      if (p > 0.95) {
+        g.fillStyle = lineC; g.beginPath(); g.moveTo(ex + ux * 16, ey + uy * 16); g.lineTo(ex - ux * 28 - uy * 24, ey - uy * 28 + ux * 24);
+        g.lineTo(ex - ux * 28 + uy * 24, ey - uy * 28 - ux * 24); g.fill();
+        const u = ((t - e.t) * 0.9 + ei * 0.33) % 1;                 // a pulse travelling the edge
+        g.fillStyle = C.sand; g.beginPath(); g.arc(lerp(sx, ex, u), lerp(sy, ey, u), 13, 0, 7); g.fill();
+      }
+    });
+    K.nodes.forEach(n => {
+      const p = back(n.t, 0.5); if (p <= 0) return;
+      const size = fit(n.label, 760, 62); font('display', size); const bw = Math.min(900, Math.max(340, g.measureText(n.label).width + 100));
+      g.save(); g.translate(n.x, n.y + Math.sin(t * 1.6 + n.y) * 4); g.scale(p, p);
+      g.shadowColor = 'rgba(0,0,0,0.3)'; g.shadowBlur = 30; g.shadowOffsetY = 12;
+      g.fillStyle = n.accent ? C.sand : (dark ? C.bone : C.ink); rr(-bw / 2, -78, bw, 156, 22); g.fill(); g.shadowColor = 'transparent';
+      if (n.accent) { g.strokeStyle = metalFill(1, t * 50); g.lineWidth = 6; rr(-bw / 2, -78, bw, 156, 22); g.stroke(); }
+      text(n.label, 0, 4, { size, color: n.accent ? C.ink : (dark ? C.ink : C.bone) });
+      g.restore();
+    });
+  }
+  if (S === 'ui') {
+    const wx = 60, wy = K.wy || 230, ww = 960, wh = K.wh || 1180;
+    const I = img.img, keys = K.keys;
+    let r = keys[0];
+    for (let i = 0; i < keys.length - 1; i++) {
+      if (t >= keys[i].t) { const p = E.inOutCubic(seg(t, keys[i + 1].t - (keys[i + 1].ease || 0.8), keys[i + 1].t));
+        r = { x: lerp(keys[i].x, keys[i + 1].x, p), y: lerp(keys[i].y, keys[i + 1].y, p), w: lerp(keys[i].w, keys[i + 1].w, p) }; }
+    }
+    const pin = inn(0, 0.6), drift = Math.sin(t * 0.9) * 6;
+    g.save(); g.translate(0, (1 - pin) * 80 + drift);
+    g.shadowColor = 'rgba(0,0,0,0.45)'; g.shadowBlur = 60; g.shadowOffsetY = 26; g.fillStyle = '#FFFFFF'; rr(wx, wy, ww, wh, 28); g.fill(); g.shadowColor = 'transparent';
+    g.save(); rr(wx, wy, ww, wh, 28); g.clip();
+    g.fillStyle = K.uibg || '#FFFFFF'; g.fillRect(wx, wy, ww, wh);
+    const k = ww / r.w, rh = wh / k;
+    g.drawImage(I, r.x, r.y, r.w, rh, wx, wy, ww, wh);
+    const P = (x, y) => [wx + (x - r.x) * k, wy + (y - r.y) * k];
+    (K.calls || []).forEach(c => {
+      const p = E.outExpo(seg(t, c.t0, c.t0 + 0.5)), q = 1 - seg(t, c.t1 - 0.2, c.t1); if (p <= 0 || q <= 0) return;
+      g.globalAlpha = q;
+      if (c.k === 'hl') { const [x0, y0] = P(c.x, c.y), [x1, y1] = P(c.x + c.w, c.y + c.h);
+        g.globalCompositeOperation = 'multiply'; g.fillStyle = rgba(C.sand, 0.95); g.fillRect(x0 - 8, y0 - 4, (x1 - x0 + 16) * p, y1 - y0 + 8);
+        g.globalCompositeOperation = 'source-over'; }
+      if (c.k === 'circle') { const [x0, y0] = P(c.x, c.y), [x1, y1] = P(c.x + c.w, c.y + c.h);
+        g.strokeStyle = C.marine; g.lineWidth = 9; g.lineCap = 'round'; g.beginPath();
+        g.ellipse((x0 + x1) / 2, (y0 + y1) / 2, (x1 - x0) / 2 + 26, (y1 - y0) / 2 + 22, -0.05, -1.7, -1.7 + 6.5 * p); g.stroke(); }
+      if (c.k === 'arrow') { const [x, y] = P(c.x, c.y); const ang = (c.ang || 135) * Math.PI / 180, L = 150 * p, bob = Math.sin(t * 5) * 8;
+        const ux = Math.cos(ang), uy = Math.sin(ang), X = x - ux * bob, Y = y - uy * bob;
+        g.strokeStyle = C.marine; g.fillStyle = C.marine; g.lineWidth = 14; g.lineCap = 'round';
+        g.beginPath(); g.moveTo(X - ux * (L + 34), Y - uy * (L + 34)); g.lineTo(X - ux * 34, Y - uy * 34); g.stroke();
+        g.beginPath(); g.moveTo(X, Y); g.lineTo(X - ux * 54 - uy * 32, Y - uy * 54 + ux * 32); g.lineTo(X - ux * 54 + uy * 32, Y - uy * 54 - ux * 32); g.fill(); }
+      g.globalAlpha = 1;
+    });
+    // a scan line drifting down the page, very faint
+    const sy = wy + ((t * 0.35) % 1) * wh; g.fillStyle = rgba(C.marine, 0.06); g.fillRect(wx, sy, ww, 60);
+    g.restore();
+    g.strokeStyle = fgA(0.22); g.lineWidth = 2; rr(wx, wy, ww, wh, 28); g.stroke();
+    g.restore();
+    if (K.label) { const p = back(K.labelT || 0.2, 0.45); font('display', 46); const bw = g.measureText(K.label).width + 64;
+      g.save(); g.translate(W / 2, wy + wh + 80); g.scale(p, p); g.fillStyle = C.sand; rr(-bw / 2, -42, bw, 84, 14); g.fill();
+      text(K.label, 0, 2, { size: 46, color: C.ink }); g.restore(); }
+  }
+  if (S === 'height') {
+    // silhouettes on a common ground line, scaled to true height; a counter rides up the tallest
+    const ground = K.ground_y || 1230, top = K.top_y || 560, maxH = Math.max(...K.items.map(i => i.h));
+    const px = (ground - top) / maxH, n = K.items.length;
+    if (K.title) text(K.title, W / 2, top - 80, { size: fit(K.title, 900, 54), alpha: inn(0) });
+    g.strokeStyle = fgA(0.4); g.lineWidth = 3; g.beginPath(); g.moveTo(90, ground); g.lineTo(990, ground); g.stroke();
+    for (let k = 0; k <= maxH; k += 25) { const y = ground - k * px; g.fillStyle = fgA(0.18); g.fillRect(90, y, 18, 2);
+      if (k && k % 50 === 0) text(k + ' m', 116, y, { size: 22, fam: 'text', color: fgA(0.45), align: 'left' }); }
+    K.items.forEach((it, i) => {
+      const x = 270 + i * (600 / Math.max(1, n - 1)), p = E.outQuint(seg(t, it.t, it.t + 1.1)), h = it.h * px * p;
+      const w = (it.w || 9) * px * 0.9 + 26;
+      if (p <= 0) return;
+      g.save();
+      if (it.kind === 'statue') {
+        g.fillStyle = C.slate; g.beginPath();                     // pedestal and figure, simple vector
+        g.moveTo(x - w * 0.8, ground); g.lineTo(x + w * 0.8, ground); g.lineTo(x + w * 0.55, ground - h * 0.5); g.lineTo(x + w * 0.3, ground - h * 0.5);
+        g.lineTo(x + w * 0.25, ground - h * 0.86); g.lineTo(x + w * 0.05, ground - h * 0.9); g.lineTo(x + w * 0.18, ground - h * 0.97);
+        g.lineTo(x + w * 0.12, ground - h); g.lineTo(x - w * 0.02, ground - h * 0.94); g.lineTo(x - w * 0.22, ground - h * 0.86);
+        g.lineTo(x - w * 0.3, ground - h * 0.5); g.lineTo(x - w * 0.55, ground - h * 0.5); g.closePath(); g.fill();
+      } else {
+        const body = h * 0.88, col = it.accent ? C.sand : C.bone;
+        g.fillStyle = col; rr(x - w / 2, ground - body, w, body, 6); g.fill();
+        g.beginPath(); g.moveTo(x - w / 2, ground - body + 2); g.quadraticCurveTo(x - w / 2, ground - h, x, ground - h);
+        g.quadraticCurveTo(x + w / 2, ground - h, x + w / 2, ground - body + 2); g.closePath(); g.fill();
+        if (it.accent) { g.strokeStyle = metalFill(1, t * 40); g.lineWidth = 4; rr(x - w / 2, ground - body, w, body, 6); g.stroke(); }
+        g.fillStyle = it.accent ? C.ink : C.slate;                  // stage seams
+        [0.33, 0.66].forEach(f => g.fillRect(x - w / 2, ground - body * f, w, 4));
+        g.beginPath(); g.moveTo(x - w / 2, ground); g.lineTo(x - w / 2 - 18, ground); g.lineTo(x - w / 2, ground - 60); g.fill();
+        g.beginPath(); g.moveTo(x + w / 2, ground); g.lineTo(x + w / 2 + 18, ground); g.lineTo(x + w / 2, ground - 60); g.fill();
+      }
+      g.restore();
+      const q = inn(it.t + 0.2, 0.5);
+      text(it.label, x, ground + 44, { size: fit(it.label, 260, 34, 'text'), fam: 'text', alpha: q, color: it.accent ? C.sand : fg });
+      if (it.accent && K.counter) {
+        const v = K.counter.value * p;
+        text(Math.round(v) + (K.counter.suffix || ''), x, ground - h - 70, { size: 64, color: C.sand });
+        if (K.counter.sub) text(K.counter.sub, x, ground - h - 22, { size: 30, fam: 'text', alpha: inn(it.t + 0.9) });
+      } else text(it.h + ' m', x, ground - h - 30, { size: 34, alpha: inn(it.t + 0.8), color: fgA(0.85) });
+    });
+    if (K.source) text(K.source, W - 90, ground + 100, { size: 24, fam: 'text', color: fgA(0.55), align: 'right' });
+  }
+  if (S === 'moneyflow') {
+    // a bank on the left, the agent on the right; the link draws, a permission lock snaps on, coins stream across
+    const y = K.y || 860, bx = 250, ax = 830, t0 = K.t0 || 0.05;
+    if (K.title) text(K.title, W / 2, y - 330, { size: fit(K.title, 900, 56), alpha: inn(t0) });
+    // bank: pediment, columns, base (clean vector in brand colours)
+    const pb = back(t0, 0.5);
+    if (pb > 0) { g.save(); g.translate(bx, y); g.scale(pb, pb);
+      g.fillStyle = C.slate; g.strokeStyle = C.bone; g.lineWidth = 5;
+      g.beginPath(); g.moveTo(-120, -60); g.lineTo(0, -135); g.lineTo(120, -60); g.closePath(); g.fill(); g.stroke();
+      for (let i = 0; i < 4; i++) { g.fillStyle = C.bone; g.fillRect(-92 + i * 56, -52, 20, 120); }
+      g.fillStyle = C.slate; rr(-130, 72, 260, 28, 6); g.fill(); g.stroke();
+      g.restore(); text(K.left || 'YOUR BANK', bx, y + 160, { size: 34, fam: 'text', alpha: inn(t0 + 0.2) }); }
+    // the agent: the real product icon
+    const pa = back(t0 + 0.25, 0.5);
+    if (pa > 0 && img.logo) { const s = 210; g.save(); g.translate(ax, y - 15); g.scale(pa, pa);
+      g.shadowColor = 'rgba(0,0,0,0.4)'; g.shadowBlur = 40; g.shadowOffsetY = 14; g.drawImage(img.logo, -s / 2, -s / 2, s, s); g.restore();
+      rec('card', ax - 105, y - 120, 210, 210);
+      text(K.right || 'THE AGENT', ax, y + 160, { size: 34, fam: 'text', alpha: inn(t0 + 0.45) }); }
+    // the link: an arc from bank to agent
+    const P = u => { const x0 = bx + 140, x1 = ax - 125, cx = (x0 + x1) / 2, cy = y - 170;
+      return [(1 - u) * (1 - u) * x0 + 2 * (1 - u) * u * cx + u * u * x1, (1 - u) * (1 - u) * (y - 20) + 2 * (1 - u) * u * cy + u * u * (y - 20)]; };
+    const pl = E.inOutCubic(seg(t, K.tLink || t0 + 0.5, (K.tLink || t0 + 0.5) + 0.7));
+    if (pl > 0) { g.strokeStyle = C.sand; g.lineWidth = 8; g.lineCap = 'round'; g.setLineDash([3, 20]); g.lineDashOffset = -t * 70;
+      g.beginPath(); for (let k = 0; k <= 40 * pl; k++) { const [x, yy] = P(k / 40); k ? g.lineTo(x, yy) : g.moveTo(x, yy); } g.stroke(); g.setLineDash([]); }
+    // coins streaming along it, eased, staggered
+    const tf = K.tFlow || t0 + 1.0;
+    if (t > tf) for (let k = 0; k < 7; k++) {
+      const u = ((t - tf) * 0.55 + k / 7) % 1, e = E.inOutCubic(u), [x, yy] = P(e), r = 26 + 6 * Math.sin(u * Math.PI);
+      const a = Math.min(1, (t - tf) * 3) * Math.sin(u * Math.PI);
+      g.globalAlpha = a; g.fillStyle = C.sand; g.beginPath(); g.arc(x, yy, r, 0, 7); g.fill();
+      g.strokeStyle = C.ink; g.lineWidth = 3; g.beginPath(); g.arc(x, yy, r - 7, 0, 7); g.stroke();
+      text('$', x, yy + 2, { size: r * 1.1, color: C.ink, alpha: a }); g.globalAlpha = 1; }
+    // the permission lock at the top of the arc; turns to a warning pulse if this is framed as a risk
+    const tl = K.tLock || t0 + 0.9, plk = back(tl, 0.45);
+    if (plk > 0) { const [lx, ly] = P(0.5); g.save(); g.translate(lx, ly - 70); g.scale(plk, plk);
+      const risk = K.risk ? seg(t, K.tRisk || tl + 1.2, (K.tRisk || tl + 1.2) + 0.4) : 0;
+      const pulse = risk > 0 ? 0.5 + 0.5 * Math.sin((t - (K.tRisk || 0)) * 9) : 0;
+      const body = risk > 0 ? `rgba(${Math.round(lerp(230, 181, risk))},${Math.round(lerp(212, 71, risk))},${Math.round(lerp(196, 58, risk))},1)` : C.sand;
+      if (risk > 0) { g.strokeStyle = `rgba(181,71,58,${0.5 * pulse})`; g.lineWidth = 6; g.beginPath(); g.arc(0, 10, 70 + 18 * pulse, 0, 7); g.stroke(); }
+      g.strokeStyle = C.bone; g.lineWidth = 10; g.beginPath(); g.arc(0, -10, 26, Math.PI, 0); g.stroke();
+      g.fillStyle = body; rr(-42, -12, 84, 66, 12); g.fill(); g.fillStyle = C.ink; g.beginPath(); g.arc(0, 18, 9, 0, 7); g.fill();
+      g.restore();
+      if (K.lockLabel) text(K.lockLabel, lx, ly - 175, { size: 30, fam: 'text', color: K.risk && t > (K.tRisk || 0) ? '#E3A79E' : C.sand, alpha: inn(tl + 0.2) }); }
+    if (K.amount) text(K.amount, W / 2, y + 260, { size: 60, alpha: inn(K.tAmount || tf) });
+  }
+  g.restore();   // push
+
+  // ---- HUD: brackets, micro labels, timecode, progress hairline ---------------------------
+  const hud = fgA(0.5);
+  const br = (x, y, w, h, arm) => { g.strokeStyle = hud; g.lineWidth = 3; g.beginPath();
+    g.moveTo(x, y + arm); g.lineTo(x, y); g.lineTo(x + arm, y); g.moveTo(x + w - arm, y); g.lineTo(x + w, y); g.lineTo(x + w, y + arm);
+    g.moveTo(x + w, y + h - arm); g.lineTo(x + w, y + h); g.lineTo(x + w - arm, y + h); g.moveTo(x + arm, y + h); g.lineTo(x, y + h); g.lineTo(x, y + h - arm); g.stroke(); };
+  const hp = E.outExpo(seg(t, 0, 0.6)), m = lerp(70, 36, hp);
+  br(m, m + 80, W - 2 * m, H - 2 * m - 160, 34);
+  text(BR.hud || '', 70, 150, { size: 22, fam: 'text', color: hud, align: 'left', track: '0.24em' });
+  text(K.hud || K.tag || '', W - 70, 150, { size: 22, fam: 'text', color: hud, align: 'right', track: '0.24em' });
+  const f = Math.floor(t * 30), s = Math.floor(t);
+  text(`00:00:${String(s).padStart(2, '0')}:${String(f % 30).padStart(2, '0')}`, 70, H - 150, { size: 20, fam: 'text', color: hud, align: 'left', track: '0.18em' });
+  g.fillStyle = hud; g.fillRect(70, H - 126, (W - 140) * clamp(t / D), 2);
+  if (K.credit) text(K.credit, W - 70, H - 150, { size: 22, fam: 'text', color: hud, align: 'right', track: '0.08em' });
+}
+</script>
+</body>
+</html>

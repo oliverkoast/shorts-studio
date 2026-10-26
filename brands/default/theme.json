@@ -1,0 +1,19 @@
+{
+  "name": "default",
+  "description": "Neutral starter brand. Copy it with /brand and make it yours.",
+  "colors": {
+    "light": "#F7F7F5",
+    "dark": "#16181D",
+    "accent": "#F2C14E",
+    "accent2": "#5B6B7F",
+    "deep": "#24324A"
+  },
+  "fonts": {
+    "display": {"family": "Inter", "file": "fonts/Inter-800.ttf"},
+    "text": {"family": "Inter", "file": "fonts/Inter-400.ttf"}
+  },
+  "logo": "logo.png",
+  "texture": null,
+  "hud": "MY SHOW",
+  "endcard": {"title": "MY SHOW", "sub": "FULL EPISODE ON YOUTUBE"}
+}

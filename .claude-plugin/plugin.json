@@ -1,0 +1,10 @@
+{
+  "name": "shorts-studio",
+  "version": "0.1.0",
+  "description": "Turn long videos into finished Shorts for YouTube, TikTok and Instagram: four Short types, real b-roll, motion graphics in your brand, and a 13-check QA gate.",
+  "author": { "name": "Oliver Korzen", "url": "https://github.com/oliverkoast" },
+  "homepage": "https://github.com/oliverkoast/shorts-studio",
+  "repository": "https://github.com/oliverkoast/shorts-studio",
+  "license": "MIT",
+  "keywords": ["video", "shorts", "tiktok", "reels", "editing", "captions", "b-roll", "motion-graphics"]
+}
