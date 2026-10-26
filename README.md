@@ -17,17 +17,20 @@ Then, in a folder with your video: **"Make 3 Shorts from this video."**
 - **A paid Claude plan (Pro or Max)** for Claude Code. Use the Code tab in the Claude desktop app, or `claude` in a
   terminal. The plain chat can't do this: editing video needs your computer.
 - **A Mac or Linux.** Windows isn't supported yet. Apple Silicon is fastest (the speech models run on its GPU).
-- **About @DISK@ of free disk space** for the tools and speech models, plus room for your videos.
+- **About 4 GB of free disk space** for the tools and speech models, plus room for your videos.
 - **Free tools that `/shorts-setup` installs for you** (it asks before each one):
   - ffmpeg: cutting, audio and captions
-  - Whisper and the speech models (@MODELS@ download, once): word timings and transcripts
+  - Whisper and the speech models (about 2.7 GB download, once): word timings and transcripts
   - yt-dlp: works with YouTube links
-  - Python, with a private environment for the plugin (@VENV@)
+  - Python, with a private environment for the plugin (about 0.9 GB)
   - Google Chrome: renders the motion graphics (most people already have it)
 - **On a Mac, setup uses Homebrew**, which may ask for your Mac password once.
 - **Optional:** a free Pexels API key for generic stock footage.
 
-First-time setup took **@SETUP@** on a clean test (most of it downloads).
+First-time setup took **about 70 seconds** in our test on a fast connection, on a Mac that already had the
+Homebrew tools (Python packages and speech models only). On a brand-new Mac, expect roughly 10 to 15 minutes,
+mostly downloads (that figure is an estimate; we haven't timed a fresh Mac yet). After that, one Short took about a
+minute to transcribe, render and check.
 
 ## The four Short types
 

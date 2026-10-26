@@ -43,7 +43,7 @@ check() {
   pybin >/dev/null && st python ok "$(pybin)" || st python MISSING "Python 3.10 or newer"
   [ -x "$VENV/bin/python" ] && "$VENV/bin/python" -c "import torch, torchaudio, numpy, scipy, PIL, websocket, fontTools" 2>/dev/null \
     && st venv ok "$VENV" || st venv MISSING "Python packages: torch, torchaudio, numpy, scipy, pillow, websocket-client, fonttools"
-  [ -s "$WHISPER_MODEL" ] && st models ok "$MODELS" || st models MISSING "speech models, about 2.8 GB download (once)"
+  [ -s "$WHISPER_MODEL" ] && st models ok "$MODELS" || st models MISSING "speech models, about 2.7 GB download (once)"
   chrome_path >/dev/null && st chrome ok "$(chrome_path)" || st chrome MISSING "Google Chrome renders the motion graphics"
   [ -x "$HOME_DIR/bin/studio" ] && st command ok "$HOME_DIR/bin/studio" || st command MISSING "the studio command"
 }
