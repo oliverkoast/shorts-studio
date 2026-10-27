@@ -4,6 +4,16 @@
 Shorts for YouTube, TikTok and Instagram: cut on real words, captioned, with real b-roll, motion graphics in your
 brand, and a 13-check QA gate before you see anything.
 
+## Install
+
+In the Claude desktop app:
+
+1. Go to **Customize**, then **Plugins**, then **Add marketplace**.
+2. Choose **Add from repository**, enter `oliverkoast/shorts-studio`, and sync. Shorts Studio shows up in your plugins.
+3. Open a new chat in the **Code** tab and run `/shorts-setup`. It installs the free video tools and sets up your brand.
+
+Or type it in Claude Code (the Code tab or `claude` in a terminal):
+
 ```
 /plugin marketplace add oliverkoast/shorts-studio
 /plugin install shorts-studio@shorts-studio
